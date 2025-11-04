@@ -318,3 +318,173 @@ Helm introduces cognitive complexity through its templating language and value p
 ### Kustomize Drawbacks
 
 Kustomize requires significant upfront investment in creating and organizing overlay and component files. Responding to unexpected configuration changes, like the blue head emergency, can be slow if the needed overlay doesn't already exist - you must create directories, write kustomization files with proper patch syntax, and understand the base/overlay/component hierarchy. The patch syntax itself adds complexity, requiring knowledge of JSON Patch operations (`op: replace`, correct path specifications like `/spec/HEAD`) which are more verbose and error-prone than simple value assignments. The mental model of layered configurations (base → overlays → components) creates indirection - to understand the final output, you must mentally merge multiple files, making it harder to see the complete picture at a glance. For teams that need to make frequent ad-hoc configuration tweaks during development or troubleshooting, the file-creation overhead becomes a significant friction point that slows down iteration cycles.
+
+## ConfigHub
+
+ConfigHub is a configuration management system that treats configuration as structured data without templates, generators, or variable interpolation. It uses **Units** (configuration containers) organized in **Spaces**, with **Variants** created through cloning to manage different environments.
+
+### Setup
+
+Create a space and set it as the default context:
+
+```bash
+cub space create robot-bear --set-context
+```
+
+### Create Base Bear Configuration
+
+Create a base unit with the red bear configuration:
+
+```bash
+cub unit create base-bear bear.yaml
+```
+
+**bear.yaml:**
+```yaml
+apiVersion: v1
+kind: Bear
+metadata:
+  name: robot-bear
+spec:
+  HEAD: red
+  BODY: red
+```
+
+### Create Variants (Red Bear with Blue Head)
+
+Clone the base unit to create a variant:
+
+```bash
+cub unit create red-blue-head --upstream-unit base-bear
+```
+
+Edit the variant to change the HEAD to blue:
+
+```bash
+cub unit edit red-blue-head
+```
+
+Or use a function to modify specific fields:
+
+```bash
+cub run set-field \
+  --unit red-blue-head \
+  --path spec.HEAD \
+  --value blue
+```
+
+**Result:**
+```yaml
+apiVersion: v1
+kind: Bear
+metadata:
+  name: robot-bear
+spec:
+  HEAD: blue
+  BODY: red
+```
+
+### Create Blue Bear Variant
+
+Create another variant for a blue bear:
+
+```bash
+cub unit create blue-bear --upstream-unit base-bear
+```
+
+Update both HEAD and BODY to blue:
+
+```bash
+cub run set-field --unit blue-bear --path spec.HEAD --value blue
+cub run set-field --unit blue-bear --path spec.BODY --value blue
+```
+
+**Result:**
+```yaml
+apiVersion: v1
+kind: Bear
+metadata:
+  name: robot-bear
+spec:
+  HEAD: blue
+  BODY: blue
+```
+
+### Create Blue Bear with Red Body
+
+Clone from blue-bear and modify the BODY:
+
+```bash
+cub unit create blue-red-body --upstream-unit blue-bear
+cub run set-field --unit blue-red-body --path spec.BODY --value red
+```
+
+**Result:**
+```yaml
+apiVersion: v1
+kind: Bear
+metadata:
+  name: robot-bear
+spec:
+  HEAD: blue
+  BODY: red
+```
+
+### Emergency Configuration Change
+
+**The factory issues an emergency warning: blue heads are faulty! Use green heads instead of blue.**
+
+**How do we achieve this?**
+
+Use a function with a filter to update all bears with blue heads:
+
+```bash
+cub run set-field \
+  --where "Data.spec.HEAD = 'blue'" \
+  --path spec.HEAD \
+  --value green
+```
+
+This command finds all units where `spec.HEAD` is `blue` and changes them to `green` in a single operation.
+
+Alternatively, update specific units individually:
+
+```bash
+cub run set-field --unit red-blue-head --path spec.HEAD --value green
+cub run set-field --unit blue-red-body --path spec.HEAD --value green
+```
+
+### View Changes
+
+See the revision history:
+
+```bash
+cub revision list red-blue-head
+```
+
+Compare changes:
+
+```bash
+cub unit diff red-blue-head --from=-1
+```
+
+### Sync Variants with Upstream Changes
+
+If the base unit is updated, propagate changes to downstream variants:
+
+```bash
+cub unit update --patch --upgrade \
+  --where "UpstreamUnit.Slug = 'base-bear'"
+```
+
+This preserves downstream-specific changes while merging upstream updates.
+
+### ConfigHub Advantages Over Helm and Kustomize
+
+ConfigHub eliminates the complexity inherent in both Helm's templating and Kustomize's overlay system by treating configuration as queryable structured data. The emergency blue head recall demonstrates this clearly: while Helm requires changing multiple command-line parameters and Kustomize requires switching between different overlay files, ConfigHub solves it with a single query-based command: `cub run set-field --where "Data.spec.HEAD = 'blue'" --path spec.HEAD --value green`. This bulk operation capability means you can fix all affected configurations at once, regardless of how many variants exist, without needing to know their names or locations in advance.
+
+The structured data model provides several key benefits. First, there's no templating language to learn - no Go templates, no value precedence rules, no special syntax. Configuration changes are explicit function calls that operate on specific data paths, making it immediately clear what will change. Second, the query language (`--where`) enables powerful selections across all configurations, something impossible with Helm's parameter-based approach or Kustomize's file-based overlays. You can ask questions like "find all units where HEAD is blue" and operate on them as a set, which is essential for managing configurations at scale.
+
+The upstream/downstream variant system solves a problem that both Helm and Kustomize struggle with: tracking relationships between related configurations. When you update the base bear, ConfigHub knows which variants are downstream and can intelligently merge changes while preserving environment-specific overrides. This is explicit and trackable, unlike Helm's scattered command-line flags or Kustomize's implicit file dependencies. The built-in revision history means every change is versioned automatically - you don't need Git for version control, though you can still use it. This makes rollbacks trivial and audit trails automatic.
+
+For the emergency scenario, ConfigHub's approach is superior in operational efficiency. Helm requires updating every deployment command or values file individually. Kustomize requires either pre-existing overlays or creating new ones on the fly. ConfigHub's query-based approach means the fix is immediate and comprehensive: one command updates all affected configurations, with full revision history, and the ability to preview changes with `--dry-run` before applying. The combination of bulk operations, automatic versioning, and relationship tracking makes ConfigHub particularly powerful for managing large-scale configuration changes across multiple environments.
