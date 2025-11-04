@@ -1,0 +1,8 @@
+apiVersion: v2
+kind: Bear
+metadata:
+  name: {{ .Release.Name }}-bear
+spec:
+  ENGINE: {{ .Values.engine | required "engine is required in chart v2" }}
+  HEAD: {{ .Values.headColor | default .Values.x }}
+  BODY: {{ .Values.bodyColor | default .Values.x }}

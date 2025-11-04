@@ -1,0 +1,6 @@
+apiVersion: v2
+name: robot-bear
+description: A Helm chart for Robot Bears (v2 - Fixed Engine)
+type: application
+version: 0.2.0
+appVersion: "2.0"
