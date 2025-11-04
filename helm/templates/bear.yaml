@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Bear
+metadata:
+  name: {{ .Release.Name }}-bear
+spec:
+  HEAD: {{ .Values.head | default .Values.x }}
+  BODY: {{ .Values.body | default .Values.x }}

@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Bear
+metadata:
+  name: robot-bear
+spec:
+  HEAD: red
+  BODY: red
