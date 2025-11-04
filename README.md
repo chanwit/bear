@@ -308,3 +308,13 @@ spec:
 ```
 
 This uses the green-head component to patch the HEAD to green, avoiding the faulty blue heads while maintaining the red body.
+
+## Complexity Analysis
+
+### Helm Drawbacks
+
+Helm introduces cognitive complexity through its templating language and value precedence system. Users must understand how `--set` flags override values files, how default values work, and how the template rendering engine processes Go templates. Parameter discovery is challenging - without reading the actual templates, it's difficult to know what values can be overridden or what their valid options are. Debugging issues requires tracing through multiple layers of value precedence (default values → values files → `--set` flags), which can be time-consuming and error-prone. The biggest drawback is reproducibility: command-line overrides create invisible configurations that exist only in deployment scripts or runbooks, making it easy to lose track of what parameters were used in production deployments. This scattered configuration state increases operational risk during incidents or when onboarding new team members.
+
+### Kustomize Drawbacks
+
+Kustomize requires significant upfront investment in creating and organizing overlay and component files. Responding to unexpected configuration changes, like the blue head emergency, can be slow if the needed overlay doesn't already exist - you must create directories, write kustomization files with proper patch syntax, and understand the base/overlay/component hierarchy. The patch syntax itself adds complexity, requiring knowledge of JSON Patch operations (`op: replace`, correct path specifications like `/spec/HEAD`) which are more verbose and error-prone than simple value assignments. The mental model of layered configurations (base → overlays → components) creates indirection - to understand the final output, you must mentally merge multiple files, making it harder to see the complete picture at a glance. For teams that need to make frequent ad-hoc configuration tweaks during development or troubleshooting, the file-creation overhead becomes a significant friction point that slows down iteration cycles.
